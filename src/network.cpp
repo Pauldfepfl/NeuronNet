@@ -128,3 +128,81 @@ void Network::print_traj(const int time, const std::map<std::string, size_t> &_n
             }
     (*_out) << std::endl;
 }
+
+std::pair<size_t, double> Network::degree(const size_t& n) const
+{
+	// Appel à la methode neighbor pour alléger le corps de la fonction
+	std::vector<std::pair<size_t, double> > neighborhood(neighbors(n));
+	std::pair<size_t,double> connec;
+	double intens(0.0);
+	size_t nb_connect(0);
+	// Parcour tous les voisins de n pour repertorier le nombre de connections et leur intensite
+	for (auto i : neighborhood)
+	{
+		++nb_connect;
+		intens+=i.second;
+	}
+	connec = std::make_pair(nb_connect, intens);
+	return connec;
+}
+
+std::vector<std::pair<size_t, double> > Network::neighbors(const size_t& n) const
+{
+	std::vector<std::pair<size_t, double>> neighborhood;
+	// Parcourt la map de liens du premier neurone lié à n jusqu'au dernier
+	for (std::map<std::pair<size_t,size_t>, double>::const_iterator I=links.lower_bound({n,0}); (I != links.end()) and (I->first.first == n ); ++I )
+	{
+			neighborhood.push_back(std::make_pair(I->first.second,I->second));
+	}
+	
+	return neighborhood;
+}
+
+std::set<size_t> Network::step(const std::vector<double>& vec)
+{
+	std::set<size_t> result;
+	size_t vecsize = vec.size();
+	// Parcourt tous les neurones et repertorie tous ceux firing, avant de les reset
+	for ( size_t i(0); i<vecsize; ++i )
+	{
+		if ( neurons[i].firing())
+		{
+			result.insert(i); 
+			neurons[i].reset();
+		}
+	}
+		
+	for ( size_t j(0); j<vecsize; ++j )
+	{
+		std::vector<std::pair<size_t, double>> neighborhood(neighbors(j));
+		double in_sum(0);
+		double ex_sum(0);
+		double w(1.0);
+		if (neurons[j].is_inhibitory())
+		{
+			w = 0.4;
+		}
+		
+		// teste les conditions necessaires pour mettre a jour l'input 
+		for (size_t k(0); k<neighborhood.size(); ++k)
+		{
+			if (result.count(neighborhood[k].first))
+			{
+				if (neuron(neighborhood[k].first).is_inhibitory() )
+				{
+					in_sum+=neighborhood[k].second;
+				}
+				
+				else
+				{
+					ex_sum+=neighborhood[k].second;
+				}
+			}
+		}
+		neurons[j].input(w*vec[j]+0.5*ex_sum+in_sum);
+		// Met ensuite a jour les neurones
+		neurons[j].step();
+	}
+	return result;
+}
+
